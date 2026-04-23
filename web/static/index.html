@@ -4,60 +4,133 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PKI Web 控制台</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWix+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkR4j8Y7W4Yx04h4d4DgYxA7rL+XvWQ6B5mA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header>
-    <h1>PKI Web 控制台</h1>
-    <p class="muted">本页通过后端调用仓库内 PowerShell 脚本，完成 CA / 签发 / 验证。仅建议在本地或内网使用。</p>
+  <div class="bg-pattern" aria-hidden="true"></div>
+  <header class="hero panel" id="overview">
+    <div class="hero-main">
+      <h1><i class="fa-solid fa-shield-halved"></i> PKI Web 控制台</h1>
+      <p class="muted">现代化双链路控制台：Intl 国际算法链路与 GM 国密链路并行编排，支持证书生命周期、mTLS 验证、TLS 观测与审计留痕。</p>
+    </div>
+    <div class="hero-actions">
+      <label class="theme-label" for="themeSelect"><i class="fa-solid fa-circle-half-stroke"></i> 主题</label>
+      <select id="themeSelect" aria-label="主题切换">
+        <option value="system">跟随系统</option>
+        <option value="light">浅色</option>
+        <option value="dark">深色</option>
+      </select>
+    </div>
   </header>
 
-  <section class="panel">
-    <h2>访问控制（可选）</h2>
-    <p class="muted">若启动服务时设置了环境变量 <code>PKI_WEB_TOKEN</code>，请在下方填写相同令牌，请求将携带 <code>X-Admin-Token</code> 头。</p>
-    <label>管理令牌 <input type="password" id="adminToken" placeholder="未设置则留空" autocomplete="off" /></label>
-    <button type="button" id="saveToken">保存到浏览器</button>
-  </section>
+  <nav class="top-nav panel" aria-label="页面菜单" role="tablist">
+    <button type="button" role="tab" aria-selected="true" aria-controls="overviewSection" class="tab-link is-active" data-tab-target="overviewSection"><i class="fa-solid fa-house"></i> 控制台概览</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="intlSection" class="tab-link" data-tab-target="intlSection"><i class="fa-solid fa-globe"></i> Intl 国际专区</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="gmSection" class="tab-link" data-tab-target="gmSection"><i class="fa-solid fa-fingerprint"></i> GM 国密专区</button>
+  </nav>
 
-  <section class="panel">
-    <h2>流程</h2>
-    <div class="grid">
-      <button data-action="reset-demo" class="danger">0. 演示重置（00-reset-demo）</button>
-      <button data-action="init">1. 初始化目录</button>
-      <button data-action="build-ca">2. 构建 Root / Intermediate CA</button>
-    </div>
-    <div class="row">
-      <label>客户端名称 <input type="text" id="clientName" value="trainee" /></label>
-      <label>P12 密码 <input type="text" id="p12Password" value="ChangeMe!2026" /></label>
-      <button data-action="issue">3. 签发服务端 + 客户端证书</button>
-      <button data-action="verify">4. 校验证书链</button>
-      <button data-action="revoke" class="danger">5. 吊销客户端证书</button>
-      <button data-action="mtls-validate">6. 一键 mTLS 验证（05-mtls-validate）</button>
-    </div>
-    <label><input type="checkbox" id="keepWebCache" /> 重置时保留 Web 缓存（`web/app/__pycache__`）</label>
-    <p class="muted">可选「操作备注」（模拟 RA 留痕），会写入审计日志。</p>
-    <label class="block"><textarea id="auditReason" rows="2" placeholder="例如：培训演示 — 已核对身份"></textarea></label>
-    <p class="muted">提示：一键 mTLS 验证会调用吊销流程（脚本内执行 `03-revoke-client.ps1`），会改变证书状态。</p>
-  </section>
+  <main>
+    <section class="panel tab-panel is-active" id="overviewSection" role="tabpanel">
+      <h2><i class="fa-solid fa-key"></i> 访问控制（可选）</h2>
+      <p class="muted">若启动服务时设置了环境变量 <code>PKI_WEB_TOKEN</code>，请在下方填写相同令牌，请求将携带 <code>X-Admin-Token</code> 头。</p>
+      <div class="form-grid compact">
+        <label>管理令牌 <input type="password" id="adminToken" placeholder="未设置则留空" autocomplete="off" /></label>
+        <button type="button" id="saveToken" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> 保存到浏览器</button>
+      </div>
+      <p class="muted">建议现场演示时将 Intl 与 GM 分链路操作，避免复用同名客户端导致状态相互影响。</p>
+    </section>
 
-  <section class="panel">
-    <h2>状态与下载</h2>
-    <div class="row">
-      <button type="button" id="btnStatus">刷新状态</button>
-      <button type="button" id="btnAudit">查看审计（最近）</button>
-      <a class="buttonlink" href="/repo/" target="_blank" rel="noopener">打开 HTTP 仓库页</a>
-      <button type="button" id="dlP12">下载当前客户端 P12</button>
-      <button type="button" id="dlChain">下载 CA 链 (ca-chain.cert.pem)</button>
-    </div>
-  </section>
+    <section class="panel tab-panel" id="intlSection" role="tabpanel" hidden>
+      <h2><i class="fa-solid fa-globe"></i> 国际算法专区（Intl）<span class="badge badge-intl">/api/intl/*</span></h2>
+      <div class="action-grid">
+        <button data-profile="intl" data-action="reset-demo" class="btn btn-danger"><i class="fa-solid fa-eraser"></i> 0. 演示重置</button>
+        <button data-profile="intl" data-action="init" class="btn btn-primary"><i class="fa-solid fa-folder-tree"></i> 1. 初始化目录</button>
+        <button data-profile="intl" data-action="build-ca" class="btn btn-primary"><i class="fa-solid fa-certificate"></i> 2. 构建 Root / Intermediate CA</button>
+        <button data-profile="intl" data-action="issue" class="btn btn-primary"><i class="fa-solid fa-id-card"></i> 3. 签发服务端 + 客户端证书</button>
+        <button data-profile="intl" data-action="verify" class="btn btn-secondary"><i class="fa-solid fa-check-double"></i> 4. 校验证书链</button>
+        <button data-profile="intl" data-action="revoke" class="btn btn-danger"><i class="fa-solid fa-ban"></i> 5. 吊销客户端证书</button>
+        <button data-profile="intl" data-action="mtls-validate" class="btn btn-secondary"><i class="fa-solid fa-link"></i> 6. 一键 mTLS 验证（TLS1.2）</button>
+        <button data-profile="intl" data-action="tls-observe" class="btn btn-secondary"><i class="fa-solid fa-wave-square"></i> 7. TLS 握手观测（TLS1.2）</button>
+        <button data-profile="intl" data-action="mtls-validate-tls13" class="btn btn-secondary"><i class="fa-solid fa-link"></i> 8. 一键 mTLS 验证（TLS1.3）</button>
+        <button data-profile="intl" data-action="tls-observe-tls13" class="btn btn-secondary"><i class="fa-solid fa-wave-square"></i> 9. TLS 握手观测（TLS1.3）</button>
+      </div>
+      <div class="form-grid">
+        <label>客户端名称 <input type="text" id="intlClientName" value="trainee" /></label>
+        <label>P12 密码 <input type="text" id="intlP12Password" value="ChangeMe!2026" /></label>
+        <label class="checkbox-wrap"><input type="checkbox" id="intlKeepWebCache" /> 重置时保留 Web 缓存（`web/app/__pycache__`）</label>
+      </div>
+      <p class="muted">可选「操作备注」（模拟 RA 留痕），会写入审计日志。</p>
+      <label class="block"><textarea id="intlAuditReason" rows="2" placeholder="例如：培训演示 — 已核对身份"></textarea></label>
+      <p class="muted">提示：一键 mTLS 验证与 TLS 握手观测都会触发吊销并更新 CRL，会改变证书状态。</p>
 
-  <section class="panel">
-    <h2>输出</h2>
-    <pre id="out"></pre>
-  </section>
+      <h3><i class="fa-solid fa-download"></i> Intl 状态与下载</h3>
+      <div class="action-grid compact">
+        <button type="button" id="btnIntlStatus" class="btn btn-secondary"><i class="fa-solid fa-heart-pulse"></i> 刷新 Intl 状态</button>
+        <button type="button" id="btnIntlAudit" class="btn btn-secondary"><i class="fa-solid fa-clipboard-list"></i> 查看 Intl 审计</button>
+        <a class="buttonlink" href="/repo/" target="_blank" rel="noopener"><i class="fa-solid fa-folder-open"></i> 打开 Intl 仓库页</a>
+        <button type="button" id="dlIntlP12" class="btn btn-primary"><i class="fa-solid fa-file-arrow-down"></i> 下载 Intl P12</button>
+        <button type="button" id="dlIntlChain" class="btn btn-primary"><i class="fa-solid fa-file-arrow-down"></i> 下载 Intl CA 链</button>
+      </div>
 
-  <section class="panel muted">
-    <p>浏览器双向 TLS 演示仍按 <code>docs/02-执行手册.md</code> 使用 <code>openssl s_server</code> 与本机 HTTPS；本控制台负责证书生成与状态查看。</p>
+      <h3><i class="fa-solid fa-terminal"></i> Intl 输出日志</h3>
+      <div class="output-toolbar">
+        <button type="button" id="btnIntlClearOutput" class="btn btn-secondary"><i class="fa-solid fa-trash"></i> 清空</button>
+        <button type="button" id="btnIntlCopyOutput" class="btn btn-secondary"><i class="fa-solid fa-copy"></i> 复制</button>
+        <label class="checkbox-wrap"><input type="checkbox" id="intlWrapOutput" checked /> 自动换行</label>
+      </div>
+      <pre id="intlOut" class="wrap"></pre>
+    </section>
+
+    <section class="panel tab-panel" id="gmSection" role="tabpanel" hidden>
+      <h2><i class="fa-solid fa-fingerprint"></i> 国密算法专区（GM）<span class="badge badge-gm">/api/gm/*</span></h2>
+      <p class="muted">若环境支持 SM2/SM3/SM4，可在本专区进行独立 PKI 与 mTLS 演示。推荐使用独立端口与日志目录。</p>
+      <div class="row">
+        <button type="button" id="btnGmCapability" class="btn btn-primary"><i class="fa-solid fa-microscope"></i> 检测国密能力</button>
+        <span class="status-pill" id="gmCapabilityState">未检测</span>
+      </div>
+      <div class="action-grid">
+        <button data-profile="gm" data-action="reset-demo" class="btn btn-danger"><i class="fa-solid fa-eraser"></i> 0. 演示重置</button>
+        <button data-profile="gm" data-action="init" class="btn btn-primary"><i class="fa-solid fa-folder-tree"></i> 1. 初始化目录</button>
+        <button data-profile="gm" data-action="build-ca" class="btn btn-primary"><i class="fa-solid fa-certificate"></i> 2. 构建 GM Root / Intermediate CA</button>
+        <button data-profile="gm" data-action="issue" class="btn btn-primary"><i class="fa-solid fa-id-card"></i> 3. 签发 GM 服务端 + 客户端证书</button>
+        <button data-profile="gm" data-action="verify" class="btn btn-secondary"><i class="fa-solid fa-check-double"></i> 4. 校验 GM 证书链</button>
+        <button data-profile="gm" data-action="revoke" class="btn btn-danger"><i class="fa-solid fa-ban"></i> 5. 吊销 GM 客户端证书</button>
+        <button data-profile="gm" data-action="mtls-validate" class="btn btn-secondary"><i class="fa-solid fa-link"></i> 6. 一键 GM mTLS 验证（TLS1.2）</button>
+        <button data-profile="gm" data-action="tls-observe" class="btn btn-secondary"><i class="fa-solid fa-wave-square"></i> 7. GM TLS 观测（TLS1.2）</button>
+        <button data-profile="gm" data-action="mtls-validate-tls13" class="btn btn-secondary"><i class="fa-solid fa-link"></i> 8. 一键 GM mTLS 验证（TLS1.3）</button>
+        <button data-profile="gm" data-action="tls-observe-tls13" class="btn btn-secondary"><i class="fa-solid fa-wave-square"></i> 9. GM TLS 观测（TLS1.3）</button>
+      </div>
+      <div class="form-grid">
+        <label>客户端名称 <input type="text" id="gmClientName" value="trainee-gm" /></label>
+        <label>P12 密码 <input type="text" id="gmP12Password" value="ChangeMe!2026" /></label>
+        <label class="checkbox-wrap"><input type="checkbox" id="gmKeepWebCache" /> 重置时保留 Web 缓存（`web/app/__pycache__`）</label>
+      </div>
+      <p class="muted">可选「操作备注」（模拟 RA 留痕），会写入审计日志。</p>
+      <label class="block"><textarea id="gmAuditReason" rows="2" placeholder="例如：GM 链路演示 — 已核对身份"></textarea></label>
+      <p class="muted">提示：GM mTLS 验证与 GM TLS 观测也会触发吊销并更新 CRL，会改变证书状态。</p>
+
+      <h3><i class="fa-solid fa-download"></i> GM 状态与下载</h3>
+      <div class="action-grid compact">
+        <button type="button" id="btnGmStatus" class="btn btn-secondary"><i class="fa-solid fa-heart-pulse"></i> 刷新 GM 状态</button>
+        <button type="button" id="btnGmAudit" class="btn btn-secondary"><i class="fa-solid fa-clipboard-list"></i> 查看 GM 审计</button>
+        <a class="buttonlink" href="/repo/gm/ca-chain.cert.pem" target="_blank" rel="noopener"><i class="fa-solid fa-folder-open"></i> 打开 GM CA 链</a>
+        <button type="button" id="dlGmP12" class="btn btn-primary"><i class="fa-solid fa-file-arrow-down"></i> 下载 GM P12</button>
+        <button type="button" id="dlGmChain" class="btn btn-primary"><i class="fa-solid fa-file-arrow-down"></i> 下载 GM CA 链</button>
+      </div>
+
+      <h3><i class="fa-solid fa-terminal"></i> GM 输出日志</h3>
+      <div class="output-toolbar">
+        <button type="button" id="btnGmClearOutput" class="btn btn-secondary"><i class="fa-solid fa-trash"></i> 清空</button>
+        <button type="button" id="btnGmCopyOutput" class="btn btn-secondary"><i class="fa-solid fa-copy"></i> 复制</button>
+        <label class="checkbox-wrap"><input type="checkbox" id="gmWrapOutput" checked /> 自动换行</label>
+      </div>
+      <pre id="gmOut" class="wrap"></pre>
+    </section>
+  </main>
+
+  <section class="panel muted footer-tip">
+    <p>浏览器双向 TLS 演示仍按 <code>docs/02-执行手册.md</code> 使用 <code>openssl s_server</code> 与本机 HTTPS；本控制台负责证书生命周期、审计与仓库查看。</p>
   </section>
 
   <script src="/static/app.js"></script>

@@ -26,7 +26,7 @@ if (-not $KeepWebCache) {
 
 # 3) Re-create clean demo baseline structure.
 & "./scripts/00-init-structure.ps1"
-if ($LASTEXITCODE -ne 0) {
+if (-not $?) {
   throw "Failed to run scripts/00-init-structure.ps1"
 }
 
