@@ -1,6 +1,7 @@
 const out = document.getElementById("out");
 const adminInput = document.getElementById("adminToken");
 const clientNameInput = document.getElementById("clientName");
+const keepWebCacheInput = document.getElementById("keepWebCache");
 
 function optionalReason() {
   const el = document.getElementById("auditReason");
@@ -99,7 +100,16 @@ document.querySelectorAll("button[data-action]").forEach((btn) => {
     out.textContent = "执行中…";
     try {
       let data;
-      if (action === "init") data = await postJson("/api/init", {});
+      if (action === "reset-demo") {
+        if (!confirm("将清理历史生成物并重建初始目录，确认继续？")) {
+          out.textContent = "已取消";
+          return;
+        }
+        const body = { keepWebCache: !!(keepWebCacheInput && keepWebCacheInput.checked) };
+        const r = optionalReason();
+        if (r) body.reason = r;
+        data = await postJson("/api/reset-demo", body);
+      } else if (action === "init") data = await postJson("/api/init", {});
       else if (action === "build-ca") data = await postJson("/api/build-ca", {});
       else if (action === "issue") {
         const body = {
@@ -123,6 +133,15 @@ document.querySelectorAll("button[data-action]").forEach((btn) => {
         const r = optionalReason();
         if (r) body.reason = r;
         data = await postJson("/api/revoke", body);
+      } else if (action === "mtls-validate") {
+        if (!confirm("一键 mTLS 验证会执行吊销流程并改变证书状态，确认继续？")) {
+          out.textContent = "已取消";
+          return;
+        }
+        const body = { clientName: clientNameInput.value.trim() || "trainee" };
+        const r = optionalReason();
+        if (r) body.reason = r;
+        data = await postJson("/api/mtls-validate", body);
       }
       log(data);
     } catch (e) {

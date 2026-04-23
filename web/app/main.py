@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
+from .services import PKIService
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS = REPO_ROOT / "scripts"
@@ -36,47 +36,66 @@ def _require_token(x_admin_token: str | None, query_token: str | None = None) ->
         raise HTTPException(status_code=401, detail="Invalid or missing admin token")
 
 
-def _run_ps1(
+pki_service = PKIService(REPO_ROOT, SCRIPTS)
+
+
+def _api_response(
+    *,
+    ok: bool,
+    code: str,
+    message: str,
+    data: dict | list | None = None,
+    logs: dict | None = None,
+) -> dict:
+    return {
+        "ok": ok,
+        "code": code,
+        "message": message,
+        "data": data if data is not None else {},
+        "logs": logs if logs is not None else {},
+    }
+
+
+def _run_script_action(
+    *,
+    action: str,
     script: str,
     args: list[str] | None = None,
     timeout: int = 600,
+    client_name: str | None = None,
+    reason: str | None = None,
 ) -> dict:
-    path = SCRIPTS / script
-    if not path.is_file():
-        raise HTTPException(status_code=500, detail=f"Script not found: {script}")
-    cmd = [
-        "powershell",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(path),
-    ]
-    if args:
-        cmd.extend(args)
     try:
-        p = subprocess.run(
-            cmd,
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        return {
-            "ok": False,
-            "returncode": -1,
-            "stdout": "",
-            "stderr": "Command timed out",
-        }
-    return {
-        "ok": p.returncode == 0,
-        "returncode": p.returncode,
-        "stdout": p.stdout or "",
-        "stderr": p.stderr or "",
-    }
+        result = pki_service.run_ps1(script, args=args, timeout=timeout)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    _append_audit(
+        action,
+        {
+            "ok": result.ok,
+            "returncode": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        },
+        client_name=client_name,
+        reason=reason,
+    )
+    return _api_response(
+        ok=result.ok,
+        code="SCRIPT_OK" if result.ok else "SCRIPT_FAILED",
+        message=f"{action} succeeded" if result.ok else f"{action} failed",
+        data={
+            "action": action,
+            "script": script,
+            "returncode": result.returncode,
+            "clientName": client_name,
+        },
+        logs={
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        },
+    )
 
 
 def _validate_client_name(name: str) -> str:
@@ -136,7 +155,12 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "repo_root": str(REPO_ROOT)}
+    return _api_response(
+        ok=True,
+        code="HEALTH_OK",
+        message="service is healthy",
+        data={"repo_root": str(REPO_ROOT)},
+    )
 
 
 @app.get("/repo/intermediate.crl.pem")
@@ -192,14 +216,19 @@ def status(
     inter = REPO_ROOT / "ca/intermediate/certs/intermediate.cert.pem"
     server_cert = REPO_ROOT / "server/server.cert.pem"
     p12_files = sorted(REPO_ROOT.glob("client/*.p12"))
-    return {
-        "repo_root": str(REPO_ROOT),
-        "has_root_ca": root_ca.is_file(),
-        "has_intermediate_cert": inter.is_file(),
-        "has_ca_chain": chain.is_file(),
-        "has_server_cert": server_cert.is_file(),
-        "client_p12": [p.name for p in p12_files],
-    }
+    return _api_response(
+        ok=True,
+        code="STATUS_OK",
+        message="status fetched",
+        data={
+            "repo_root": str(REPO_ROOT),
+            "has_root_ca": root_ca.is_file(),
+            "has_intermediate_cert": inter.is_file(),
+            "has_ca_chain": chain.is_file(),
+            "has_server_cert": server_cert.is_file(),
+            "client_p12": [p.name for p in p12_files],
+        },
+    )
 
 
 class IssueBody(BaseModel):
@@ -217,51 +246,101 @@ class ClientNameBody(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class ResetBody(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    keep_web_cache: bool = Field(alias="keepWebCache", default=False)
+    reason: str | None = Field(default=None, max_length=500)
+
+
 @app.post("/api/init")
 def api_init(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_token(x_admin_token)
-    out = _run_ps1("00-init-structure.ps1")
-    _append_audit("init", out)
-    return out
+    return _run_script_action(action="init", script="00-init-structure.ps1")
 
 
 @app.post("/api/build-ca")
 def api_build_ca(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_token(x_admin_token)
-    out = _run_ps1("01-build-ca.ps1", timeout=900)
-    _append_audit("build-ca", out)
-    return out
+    return _run_script_action(
+        action="build-ca",
+        script="01-build-ca.ps1",
+        timeout=900,
+    )
 
 
 @app.post("/api/issue")
 def api_issue(body: IssueBody, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_token(x_admin_token)
     cn = _validate_client_name(body.client_name)
-    out = _run_ps1(
-        "02-issue-certs.ps1",
-        ["-ClientName", cn, "-P12Password", body.p12_password],
+    return _run_script_action(
+        action="issue",
+        script="02-issue-certs.ps1",
+        args=["-ClientName", cn, "-P12Password", body.p12_password],
         timeout=900,
+        client_name=cn,
+        reason=body.reason,
     )
-    _append_audit("issue", out, client_name=cn, reason=body.reason)
-    return out
 
 
 @app.post("/api/verify")
 def api_verify(body: ClientNameBody, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_token(x_admin_token)
     cn = _validate_client_name(body.client_name)
-    out = _run_ps1("04-verify.ps1", ["-ClientName", cn])
-    _append_audit("verify", out, client_name=cn, reason=body.reason)
-    return out
+    return _run_script_action(
+        action="verify",
+        script="04-verify.ps1",
+        args=["-ClientName", cn],
+        client_name=cn,
+        reason=body.reason,
+    )
 
 
 @app.post("/api/revoke")
 def api_revoke(body: ClientNameBody, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     _require_token(x_admin_token)
     cn = _validate_client_name(body.client_name)
-    out = _run_ps1("03-revoke-client.ps1", ["-ClientName", cn])
-    _append_audit("revoke", out, client_name=cn, reason=body.reason)
-    return out
+    return _run_script_action(
+        action="revoke",
+        script="03-revoke-client.ps1",
+        args=["-ClientName", cn],
+        client_name=cn,
+        reason=body.reason,
+    )
+
+
+@app.post("/api/reset-demo")
+def api_reset_demo(body: ResetBody, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    """Reset generated runtime artifacts and re-create clean baseline folders."""
+    _require_token(x_admin_token)
+    args: list[str] = []
+    if body.keep_web_cache:
+        args.append("-KeepWebCache")
+    return _run_script_action(
+        action="reset-demo",
+        script="00-reset-demo.ps1",
+        args=args,
+        timeout=600,
+        reason=body.reason,
+    )
+
+
+@app.post("/api/mtls-validate")
+def api_mtls_validate(body: ClientNameBody, x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+    """
+    Run full local mTLS validation helper (includes revoke flow).
+    This is for demo/testing and may revoke the selected client certificate.
+    """
+    _require_token(x_admin_token)
+    cn = _validate_client_name(body.client_name)
+    return _run_script_action(
+        action="mtls-validate",
+        script="05-mtls-validate.ps1",
+        args=["-ClientName", cn],
+        timeout=900,
+        client_name=cn,
+        reason=body.reason,
+    )
 
 
 @app.get("/api/audit/tail")
@@ -274,11 +353,21 @@ def audit_tail(
     if os.environ.get("PKI_WEB_TOKEN", "").strip():
         _require_token_for_audit_read(x_admin_token, admin_token)
     if not AUDIT_LOG.is_file():
-        return {"lines": [], "path": str(AUDIT_LOG)}
+        return _api_response(
+            ok=True,
+            code="AUDIT_EMPTY",
+            message="audit log not found",
+            data={"path": str(AUDIT_LOG), "count": 0, "entries": []},
+        )
     try:
         raw = AUDIT_LOG.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return {"lines": [], "path": str(AUDIT_LOG)}
+        return _api_response(
+            ok=False,
+            code="AUDIT_READ_FAILED",
+            message="failed to read audit log",
+            data={"path": str(AUDIT_LOG), "count": 0, "entries": []},
+        )
     lines = [ln for ln in raw.splitlines() if ln.strip()]
     tail = lines[-n:]
     parsed = []
@@ -287,7 +376,12 @@ def audit_tail(
             parsed.append(json.loads(ln))
         except json.JSONDecodeError:
             parsed.append({"raw": ln})
-    return {"path": str(AUDIT_LOG), "count": len(parsed), "entries": parsed}
+    return _api_response(
+        ok=True,
+        code="AUDIT_OK",
+        message="audit entries fetched",
+        data={"path": str(AUDIT_LOG), "count": len(parsed), "entries": parsed},
+    )
 
 
 @app.get("/api/download/p12/{client_name}")

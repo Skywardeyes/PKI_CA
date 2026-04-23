@@ -22,6 +22,7 @@
   <section class="panel">
     <h2>流程</h2>
     <div class="grid">
+      <button data-action="reset-demo" class="danger">0. 演示重置（00-reset-demo）</button>
       <button data-action="init">1. 初始化目录</button>
       <button data-action="build-ca">2. 构建 Root / Intermediate CA</button>
     </div>
@@ -31,9 +32,12 @@
       <button data-action="issue">3. 签发服务端 + 客户端证书</button>
       <button data-action="verify">4. 校验证书链</button>
       <button data-action="revoke" class="danger">5. 吊销客户端证书</button>
+      <button data-action="mtls-validate">6. 一键 mTLS 验证（05-mtls-validate）</button>
     </div>
+    <label><input type="checkbox" id="keepWebCache" /> 重置时保留 Web 缓存（`web/app/__pycache__`）</label>
     <p class="muted">可选「操作备注」（模拟 RA 留痕），会写入审计日志。</p>
     <label class="block"><textarea id="auditReason" rows="2" placeholder="例如：培训演示 — 已核对身份"></textarea></label>
+    <p class="muted">提示：一键 mTLS 验证会调用吊销流程（脚本内执行 `03-revoke-client.ps1`），会改变证书状态。</p>
   </section>
 
   <section class="panel">

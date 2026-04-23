@@ -1,26 +1,11 @@
 # PKI_CA 任务二落地实现
 
-本仓库用于完成培训计划中的任务二：自建 CA、签发证书、完成浏览器双向 SSL 认证并输出汇报材料。
+本仓库用于完成培训计划中的任务二：自建 CA、签发证书、完成浏览器双向 SSL 认证并输出汇报材料。环境约定：**Windows、无 Docker、可选 Web 控制台（单人单机演示友好）**。
+术语口径（管理员 / 终端用户 / Web 控制台 / HTTP 证书仓库 / 业务 mTLS 服务）统一见 [docs/02-执行手册.md](docs/02-执行手册.md) **§2.1**。
 
-## 快速开始
-在仓库根目录打开 **Windows PowerShell**，执行（路径按本机修改）：
+## 快速开始（统一 Web 控制台）
 
-```powershell
-cd D:\Github\PKI_CA
-
-powershell -ExecutionPolicy Bypass -File .\scripts\00-init-structure.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\01-build-ca.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\02-issue-certs.ps1 -ClientName trainee -P12Password "ChangeMe!2026"
-powershell -ExecutionPolicy Bypass -File .\scripts\04-verify.ps1 -ClientName trainee
-```
-
-已安装 PowerShell 7 时，可将 `powershell` 换成 `pwsh`，参数不变。
-
-访问：`https://localhost:8443/`（按 `docs/02-执行手册.md` 启动 `openssl s_server` 后）
-
-## Web PKI 控制台（可选）
-
-在浏览器中点击完成初始化、建 CA、签发、验证、吊销与下载，说明见 [web/README.md](web/README.md)。
+在仓库根目录启动 Python Web 控制台：
 
 ```powershell
 cd D:\Github\PKI_CA\web
@@ -30,19 +15,34 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
-浏览器打开 `http://127.0.0.1:8765/`。
+浏览器打开 `http://127.0.0.1:8765/`，按按钮执行：
+- `0. 演示重置`
+- `1. 初始化目录`
+- `2. 构建 Root / Intermediate`
+- `3. 签发服务端 + 客户端`
+- `4. 校验证书链`
+
+浏览器 mTLS：先按 [docs/02-执行手册.md](docs/02-执行手册.md) **第 9、10 节** 启动业务 mTLS 服务（`openssl s_server`）后访问 `https://localhost:8443/`。
+
+## Web PKI 控制台
+
+控制台已接入全部核心流程按钮；HTTP 证书仓库 `/repo/`（CDP/AIA 目标）、审计日志、API 响应结构见 [web/README.md](web/README.md)。
 
 ## 目录说明
-- `ca/`：OpenSSL CA 配置
+
+- `ca/`：OpenSSL CA 配置（含 CDP/AIA 的 `openssl-intermediate.cnf`）
 - `scripts/`：自动化执行脚本
 - `web/`：Web 控制台（FastAPI + 静态页）
-- `configs/nginx/`：Nginx mTLS 配置
-- `docs/`：标准、手册、验证矩阵、汇报提纲、演示脚本
-- `artifacts/`：验证日志等证据输出
+- `configs/nginx/`：可选的本机 Nginx mTLS 参考配置
+- `docs/`：实施标准、**执行手册（含验证矩阵与现场演示时间轴）**、汇报提纲等
+- `artifacts/`：验证日志、审计等证据输出（默认不入库）
 
-## 关键文档
-- `docs/01-任务二实施标准.md`
-- `docs/02-执行手册.md`
-- `docs/03-验证矩阵.md`
-- `docs/04-PKI基础知识汇报提纲.md`
-- `docs/05-现场演示脚本.md`
+## 文档索引
+
+| 文档 | 用途 |
+|------|------|
+| [docs/01-任务二实施标准.md](docs/01-任务二实施标准.md) | 命名、策略、安全与交付基线 |
+| [docs/02-执行手册.md](docs/02-执行手册.md) | **主文档**：环境清零、分步命令、Web/CDP、mTLS、吊销、验收、**验证矩阵（§16）**、**演示时间轴（§17）** |
+| [docs/04-PKI基础知识汇报提纲.md](docs/04-PKI基础知识汇报提纲.md) | 汇报结构（已与当前实现同步） |
+| [web/README.md](web/README.md) | Web 安装、令牌、`/repo/` 与审计 API |
+| [培训计划-陆宇涵 姚壬爔.md](培训计划-陆宇涵%20姚壬爔.md) | 原培训计划（任务来源） |

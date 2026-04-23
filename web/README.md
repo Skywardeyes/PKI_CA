@@ -1,15 +1,11 @@
-# Web PKI 控制台
+# Web PKI 控制台（唯一操作入口）
 
-在浏览器中触发与 PowerShell 脚本等价的操作（初始化、建 CA、签发、验证、吊销），并下载 `p12` / CA 链文件。
+本项目推荐只通过本页面完成操作，不再手工逐条执行脚本命令。  
+术语口径（Web 控制台、HTTP 证书仓库、业务 mTLS 服务等）与 [docs/02-执行手册.md](../docs/02-执行手册.md) **§2.1** 保持一致。
 
-## 依赖
+## 5 分钟上手
 
-- Python 3.10+
-- 本机已安装 **OpenSSL**、**PowerShell**，且仓库根目录下 `scripts/*.ps1` 可正常运行
-
-## 安装与启动
-
-在仓库根目录执行：
+### 1) 安装依赖（首次）
 
 ```powershell
 cd D:\Github\PKI_CA\web
@@ -18,13 +14,38 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-启动（仅本机）：
+### 2) 启动控制台
 
 ```powershell
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
 浏览器打开：`http://127.0.0.1:8765/`
+
+### 3) 按钮执行顺序（推荐）
+
+1. `0. 演示重置`
+2. `1. 初始化目录`
+3. `2. 构建 Root / Intermediate CA`
+4. `3. 签发服务端 + 客户端证书`
+5. `4. 校验证书链`
+6. （可选）`5. 吊销客户端证书`
+7. （可选）`6. 一键 mTLS 验证`
+
+## 按钮与脚本映射
+
+- `0. 演示重置` -> `00-reset-demo.ps1`
+- `1. 初始化目录` -> `00-init-structure.ps1`
+- `2. 构建 Root / Intermediate` -> `01-build-ca.ps1`
+- `3. 签发` -> `02-issue-certs.ps1`
+- `4. 校验` -> `04-verify.ps1`
+- `5. 吊销` -> `03-revoke-client.ps1`
+- `6. 一键 mTLS 验证` -> `05-mtls-validate.ps1`（会触发吊销流程）
+
+## mTLS 浏览器演示（与控制台配合）
+
+控制台负责证书生命周期（重置/建 CA/签发/吊销/校验），  
+业务双向 TLS 演示仍使用 `openssl s_server` 并访问 `https://localhost:8443/`（详见 `docs/02-执行手册.md` 第 9、10 节）。
 
 ## HTTP 证书仓库（CDP / AIA，公开只读）
 
@@ -39,7 +60,28 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ## 审计日志
 
 - 控制台触发的 `init` / `build-ca` / `issue` / `verify` / `revoke` 会追加写入仓库根下 `artifacts/logs/audit.jsonl`（每行一条 JSON）。
+- 还会记录 `reset-demo`、`mtls-validate` 两类动作。
 - `GET /api/audit/tail?n=50`：若已设置 `PKI_WEB_TOKEN`，须带 `X-Admin-Token`；未设置时允许直接读取（便于单人本机演示）。
+
+## API 响应结构（统一）
+
+除下载接口（直接返回文件）外，JSON API 统一返回：
+
+```json
+{
+  "ok": true,
+  "code": "STATUS_OK",
+  "message": "status fetched",
+  "data": {},
+  "logs": {}
+}
+```
+
+- `ok`：是否成功
+- `code`：机器可读状态码（如 `SCRIPT_OK` / `SCRIPT_FAILED`）
+- `message`：人类可读说明
+- `data`：业务数据
+- `logs`：脚本输出（`stdout` / `stderr`）
 
 ## 安全建议
 
@@ -51,6 +93,7 @@ $env:PKI_WEB_TOKEN = "请改为强随机字符串"
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
-## 与命令行的关系
+## 依赖
 
-Web 控制台是对现有 `scripts/*.ps1` 的封装；浏览器 **mTLS 演示** 仍按 `docs/02-执行手册.md` 使用 `openssl s_server` 与本机 HTTPS。
+- Python 3.10+
+- 本机已安装 **OpenSSL**、**PowerShell**（PowerShell 由 Web 后端调用脚本引擎使用）
