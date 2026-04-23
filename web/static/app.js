@@ -1,109 +1,21 @@
+const out = document.getElementById("out");
 const adminInput = document.getElementById("adminToken");
-const intlClientNameInput = document.getElementById("intlClientName");
-const gmClientNameInput = document.getElementById("gmClientName");
-const intlKeepWebCacheInput = document.getElementById("intlKeepWebCache");
-const gmKeepWebCacheInput = document.getElementById("gmKeepWebCache");
-const gmCapabilityState = document.getElementById("gmCapabilityState");
-const themeSelect = document.getElementById("themeSelect");
-const intlOut = document.getElementById("intlOut");
-const gmOut = document.getElementById("gmOut");
-const intlWrapOutputInput = document.getElementById("intlWrapOutput");
-const gmWrapOutputInput = document.getElementById("gmWrapOutput");
-const tabLinks = document.querySelectorAll(".tab-link");
-const tabPanels = document.querySelectorAll(".tab-panel");
+const clientNameInput = document.getElementById("clientName");
+const keepWebCacheInput = document.getElementById("keepWebCache");
 
-function optionalReason(profile) {
-  const el = document.getElementById(profile === "gm" ? "gmAuditReason" : "intlAuditReason");
+function optionalReason() {
+  const el = document.getElementById("auditReason");
   if (!el) return undefined;
   const s = el.value.trim();
   return s ? s : undefined;
 }
 
-function getOutEl(profile) {
-  return profile === "gm" ? gmOut : intlOut;
-}
-
-function currentProfileFromTab() {
-  const active = document.querySelector(".tab-link.is-active");
-  const target = active ? active.getAttribute("data-tab-target") : "";
-  return target === "gmSection" ? "gm" : "intl";
-}
-
-function log(obj, profile = currentProfileFromTab()) {
-  const out = getOutEl(profile);
+function log(obj) {
   out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
-}
-
-function setTheme(mode) {
-  if (mode === "dark" || mode === "light") {
-    document.body.setAttribute("data-theme", mode);
-  } else {
-    document.body.removeAttribute("data-theme");
-  }
-}
-
-function activateTab(targetId) {
-  tabLinks.forEach((btn) => {
-    const active = btn.getAttribute("data-tab-target") === targetId;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-selected", active ? "true" : "false");
-  });
-  tabPanels.forEach((panel) => {
-    const active = panel.id === targetId;
-    panel.classList.toggle("is-active", active);
-    panel.hidden = !active;
-  });
-}
-
-function renderApiResult(data, profileHint = currentProfileFromTab()) {
-  if (!data || typeof data !== "object" || !("ok" in data)) {
-    log(data, profileHint);
-    return;
-  }
-  const out = getOutEl((data.data && data.data.profile) || profileHint);
-  const lines = [];
-  lines.push(`[${data.ok ? "OK" : "FAILED"}] ${data.code || "UNKNOWN"}: ${data.message || ""}`);
-  const d = data.data || {};
-  if (d.profile) lines.push(`profile: ${d.profile}`);
-  if (d.action) lines.push(`action: ${d.action}`);
-  if (typeof d.duration_ms === "number") lines.push(`duration_ms: ${d.duration_ms}`);
-  if (Array.isArray(d.steps) && d.steps.length) lines.push(`steps: ${d.steps.join(" -> ")}`);
-  if (Array.isArray(d.artifacts) && d.artifacts.length) lines.push(`artifacts: ${d.artifacts.join(", ")}`);
-  if (d.action === "tls-observe") {
-    lines.push("strict-note: TLS1.2 可用于讲解经典握手路径；TLS1.3 默认采用 (EC)DHE 密钥交换，不再使用 RSA 密钥传输。");
-  }
-  if (data.logs && typeof data.logs.stdout === "string" && data.logs.stdout.trim()) {
-    lines.push("");
-    lines.push("stdout:");
-    lines.push(data.logs.stdout.trim());
-  }
-  if (data.logs && typeof data.logs.stderr === "string" && data.logs.stderr.trim()) {
-    lines.push("");
-    lines.push("stderr:");
-    lines.push(data.logs.stderr.trim());
-  }
-  lines.push("");
-  lines.push("raw:");
-  lines.push(JSON.stringify(data, null, 2));
-  out.textContent = lines.join("\n");
 }
 
 function adminTokenValue() {
   return (adminInput.value || localStorage.getItem("pki_admin_token") || "").trim();
-}
-
-function apiBase(profile) {
-  return profile === "gm" ? "/api/gm" : "/api/intl";
-}
-
-function profileClientName(profile) {
-  return ((profile === "gm" ? gmClientNameInput : intlClientNameInput).value || "").trim() || (profile === "gm" ? "trainee-gm" : "trainee");
-}
-
-function profileP12Password(profile) {
-  const id = profile === "gm" ? "gmP12Password" : "intlP12Password";
-  const el = document.getElementById(id);
-  return el ? el.value : "ChangeMe!2026";
 }
 
 function headersJson() {
@@ -130,63 +42,6 @@ document.getElementById("saveToken").addEventListener("click", () => {
 window.addEventListener("DOMContentLoaded", () => {
   const saved = localStorage.getItem("pki_admin_token");
   if (saved) adminInput.value = saved;
-  const savedTheme = localStorage.getItem("pki_theme_mode") || "system";
-  themeSelect.value = savedTheme;
-  setTheme(savedTheme);
-  const savedIntlWrap = localStorage.getItem("pki_output_wrap_intl");
-  const intlWrap = savedIntlWrap === null ? true : savedIntlWrap === "1";
-  intlWrapOutputInput.checked = intlWrap;
-  intlOut.classList.toggle("wrap", intlWrap);
-  const savedGmWrap = localStorage.getItem("pki_output_wrap_gm");
-  const gmWrap = savedGmWrap === null ? true : savedGmWrap === "1";
-  gmWrapOutputInput.checked = gmWrap;
-  gmOut.classList.toggle("wrap", gmWrap);
-});
-
-themeSelect.addEventListener("change", () => {
-  const mode = themeSelect.value || "system";
-  localStorage.setItem("pki_theme_mode", mode);
-  setTheme(mode);
-});
-
-tabLinks.forEach((btn) => {
-  btn.addEventListener("click", () => activateTab(btn.getAttribute("data-tab-target")));
-});
-
-document.getElementById("btnIntlClearOutput").addEventListener("click", () => {
-  intlOut.textContent = "";
-});
-
-document.getElementById("btnGmClearOutput").addEventListener("click", () => {
-  gmOut.textContent = "";
-});
-
-document.getElementById("btnIntlCopyOutput").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(intlOut.textContent || "");
-    log("已复制 Intl 输出到剪贴板", "intl");
-  } catch {
-    log("复制失败：当前环境不允许访问剪贴板", "intl");
-  }
-});
-
-document.getElementById("btnGmCopyOutput").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(gmOut.textContent || "");
-    log("已复制 GM 输出到剪贴板", "gm");
-  } catch {
-    log("复制失败：当前环境不允许访问剪贴板", "gm");
-  }
-});
-
-intlWrapOutputInput.addEventListener("change", () => {
-  intlOut.classList.toggle("wrap", intlWrapOutputInput.checked);
-  localStorage.setItem("pki_output_wrap_intl", intlWrapOutputInput.checked ? "1" : "0");
-});
-
-gmWrapOutputInput.addEventListener("change", () => {
-  gmOut.classList.toggle("wrap", gmWrapOutputInput.checked);
-  localStorage.setItem("pki_output_wrap_gm", gmWrapOutputInput.checked ? "1" : "0");
 });
 
 async function postJson(url, body) {
@@ -242,173 +97,94 @@ async function downloadBlob(path, filename) {
 document.querySelectorAll("button[data-action]").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const action = btn.getAttribute("data-action");
-    const profile = btn.getAttribute("data-profile") || "intl";
-    const base = apiBase(profile);
-    getOutEl(profile).textContent = "执行中…";
+    out.textContent = "执行中…";
     try {
       let data;
       if (action === "reset-demo") {
         if (!confirm("将清理历史生成物并重建初始目录，确认继续？")) {
-          getOutEl(profile).textContent = "已取消";
+          out.textContent = "已取消";
           return;
         }
-        const body = { keepWebCache: !!((profile === "gm" ? gmKeepWebCacheInput : intlKeepWebCacheInput) && (profile === "gm" ? gmKeepWebCacheInput : intlKeepWebCacheInput).checked) };
-        const r = optionalReason(profile);
+        const body = { keepWebCache: !!(keepWebCacheInput && keepWebCacheInput.checked) };
+        const r = optionalReason();
         if (r) body.reason = r;
-        data = await postJson(`${base}/reset-demo`, body);
-      } else if (action === "init") data = await postJson(`${base}/init`, {});
-      else if (action === "build-ca") data = await postJson(`${base}/build-ca`, {});
+        data = await postJson("/api/reset-demo", body);
+      } else if (action === "init") data = await postJson("/api/init", {});
+      else if (action === "build-ca") data = await postJson("/api/build-ca", {});
       else if (action === "issue") {
         const body = {
-          clientName: profileClientName(profile),
-          p12Password: profileP12Password(profile),
+          clientName: clientNameInput.value.trim() || "trainee",
+          p12Password: document.getElementById("p12Password").value,
         };
-        const r = optionalReason(profile);
+        const r = optionalReason();
         if (r) body.reason = r;
-        data = await postJson(`${base}/issue`, body);
+        data = await postJson("/api/issue", body);
       } else if (action === "verify") {
-        const body = { clientName: profileClientName(profile) };
-        const r = optionalReason(profile);
+        const body = { clientName: clientNameInput.value.trim() || "trainee" };
+        const r = optionalReason();
         if (r) body.reason = r;
-        data = await postJson(`${base}/verify`, body);
+        data = await postJson("/api/verify", body);
       } else if (action === "revoke") {
         if (!confirm("确定吊销该客户端证书？")) {
-          getOutEl(profile).textContent = "已取消";
+          out.textContent = "已取消";
           return;
         }
-        const body = { clientName: profileClientName(profile) };
-        const r = optionalReason(profile);
+        const body = { clientName: clientNameInput.value.trim() || "trainee" };
+        const r = optionalReason();
         if (r) body.reason = r;
-        data = await postJson(`${base}/revoke`, body);
-      } else if (action === "mtls-validate" || action === "mtls-validate-tls13") {
-        const tlsLabel = action === "mtls-validate-tls13" ? "TLS1.3" : "TLS1.2";
+        data = await postJson("/api/revoke", body);
+      } else if (action === "mtls-validate") {
         if (!confirm("一键 mTLS 验证会执行吊销流程并改变证书状态，确认继续？")) {
-          getOutEl(profile).textContent = "已取消";
+          out.textContent = "已取消";
           return;
         }
-        const body = { clientName: profileClientName(profile) };
-        const r = optionalReason(profile);
+        const body = { clientName: clientNameInput.value.trim() || "trainee" };
+        const r = optionalReason();
         if (r) body.reason = r;
-        data = await postJson(`${base}/${action}`, body);
-        if (data && data.data) data.data.tlsVersion = tlsLabel;
-      } else if (action === "tls-observe" || action === "tls-observe-tls13") {
-        const tlsLabel = action === "tls-observe-tls13" ? "TLS1.3" : "TLS1.2";
-        if (!confirm("TLS 握手观测会执行吊销与 CRL 更新，并生成多份握手日志，确认继续？")) {
-          getOutEl(profile).textContent = "已取消";
-          return;
-        }
-        const body = { clientName: profileClientName(profile) };
-        const r = optionalReason(profile);
-        if (r) body.reason = r;
-        data = await postJson(`${base}/${action}`, body);
-        if (data && data.data) data.data.tlsVersion = tlsLabel;
+        data = await postJson("/api/mtls-validate", body);
       }
-      renderApiResult(data, profile);
+      log(data);
     } catch (e) {
-      log(String(e.message || e), profile);
+      log(String(e.message || e));
     }
   });
 });
 
-document.getElementById("btnIntlStatus").addEventListener("click", async () => {
-  getOutEl("intl").textContent = "查询中…";
+document.getElementById("btnStatus").addEventListener("click", async () => {
+  out.textContent = "查询中…";
   try {
-    renderApiResult(await getJson("/api/intl/status"), "intl");
+    log(await getJson("/api/status"));
   } catch (e) {
-    log(String(e.message || e), "intl");
+    log(String(e.message || e));
   }
 });
 
-document.getElementById("btnGmStatus").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "查询中…";
+document.getElementById("btnAudit").addEventListener("click", async () => {
+  out.textContent = "加载审计…";
   try {
-    renderApiResult(await getJson("/api/gm/status"), "gm");
+    log(await getJson("/api/audit/tail?n=80"));
   } catch (e) {
-    log(String(e.message || e), "gm");
+    log(String(e.message || e));
   }
 });
 
-document.getElementById("btnIntlAudit").addEventListener("click", async () => {
-  getOutEl("intl").textContent = "加载 Intl 审计…";
-  try {
-    const data = await getJson("/api/audit/tail?n=80");
-    const entries = (data.data && Array.isArray(data.data.entries)) ? data.data.entries : [];
-    const filtered = entries.filter((e) => (e && e.profile) !== "gm");
-    data.data.entries = filtered;
-    data.data.count = filtered.length;
-    data.message = "intl audit entries fetched";
-    renderApiResult(data, "intl");
-  } catch (e) {
-    log(String(e.message || e), "intl");
-  }
-});
-
-document.getElementById("btnGmAudit").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "加载 GM 审计…";
-  try {
-    const data = await getJson("/api/audit/tail?n=80");
-    const entries = (data.data && Array.isArray(data.data.entries)) ? data.data.entries : [];
-    const filtered = entries.filter((e) => e && e.profile === "gm");
-    data.data.entries = filtered;
-    data.data.count = filtered.length;
-    data.message = "gm audit entries fetched";
-    renderApiResult(data, "gm");
-  } catch (e) {
-    log(String(e.message || e), "gm");
-  }
-});
-
-document.getElementById("dlIntlP12").addEventListener("click", async () => {
-  const name = profileClientName("intl");
-  getOutEl("intl").textContent = "下载中…";
+document.getElementById("dlP12").addEventListener("click", async () => {
+  const name = clientNameInput.value.trim() || "trainee";
+  out.textContent = "下载中…";
   try {
     await downloadBlob(`/api/download/p12/${encodeURIComponent(name)}`, `client-${name}.p12`);
-    log("下载已开始：client-" + name + ".p12", "intl");
+    log("下载已开始：client-" + name + ".p12");
   } catch (e) {
-    log(String(e.message || e), "intl");
+    log(String(e.message || e));
   }
 });
 
-document.getElementById("dlIntlChain").addEventListener("click", async () => {
-  getOutEl("intl").textContent = "下载中…";
+document.getElementById("dlChain").addEventListener("click", async () => {
+  out.textContent = "下载中…";
   try {
     await downloadBlob("/api/download/ca-chain", "ca-chain.cert.pem");
-    log("下载已开始：ca-chain.cert.pem", "intl");
+    log("下载已开始：ca-chain.cert.pem");
   } catch (e) {
-    log(String(e.message || e), "intl");
-  }
-});
-
-document.getElementById("dlGmP12").addEventListener("click", async () => {
-  const name = profileClientName("gm");
-  getOutEl("gm").textContent = "下载中…";
-  try {
-    await downloadBlob(`/api/gm/download/p12/${encodeURIComponent(name)}`, `gm-client-${name}.p12`);
-    log("下载已开始：gm-client-" + name + ".p12", "gm");
-  } catch (e) {
-    log(String(e.message || e), "gm");
-  }
-});
-
-document.getElementById("dlGmChain").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "下载中…";
-  try {
-    await downloadBlob("/api/gm/download/ca-chain", "gm-ca-chain.cert.pem");
-    log("下载已开始：gm-ca-chain.cert.pem", "gm");
-  } catch (e) {
-    log(String(e.message || e), "gm");
-  }
-});
-
-document.getElementById("btnGmCapability").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "检测中…";
-  gmCapabilityState.textContent = "检测中...";
-  try {
-    const data = await getJson("/api/gm/capability");
-    renderApiResult(data, "gm");
-    gmCapabilityState.textContent = data.ok ? "可用" : "不可用";
-  } catch (e) {
-    gmCapabilityState.textContent = "检测失败";
-    log(String(e.message || e), "gm");
+    log(String(e.message || e));
   }
 });
