@@ -1,0 +1,29 @@
+# Generated PKI artifacts
+artifacts/
+ca/root/private/
+ca/intermediate/private/
+ca/root/newcerts/
+ca/intermediate/newcerts/
+ca/root/index.txt*
+ca/intermediate/index.txt*
+ca/root/serial*
+ca/intermediate/serial*
+ca/root/crlnumber*
+ca/intermediate/crlnumber*
+ca/intermediate/certs/intermediate.cert.pem
+ca/intermediate/certs/ca-chain.cert.pem
+ca/root/certs/ca.cert.pem
+ca/root/certs/ca.cert.srl
+ca/intermediate/certs/*.cert.pem
+ca/intermediate/crl/*.crl.pem
+ca/intermediate/csr/*.csr.pem
+ca/root/csr/*.csr.pem
+ca/intermediate/private/*.key.pem
+ca/root/private/*.key.pem
+client/*.p12
+logs/
+
+# Python web console
+web/.venv/
+web/**/__pycache__/
+培训计划-陆宇涵 姚壬爔.md

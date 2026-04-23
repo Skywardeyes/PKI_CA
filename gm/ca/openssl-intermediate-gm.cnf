@@ -1,0 +1,84 @@
+# Demo PKI: CRL/CAIssuers URIs below must match the Web console (FastAPI) bind address.
+# Default: http://127.0.0.1:8765/repo/... — if you change uvicorn host/port, update these lines
+# and re-issue leaf certificates (embedded URLs do not auto-update).
+
+[ ca ]
+default_ca = CA_default
+
+[ CA_default ]
+dir               = ./gm/ca/intermediate
+certs             = $dir/certs
+crl_dir           = $dir/crl
+new_certs_dir     = $dir/newcerts
+database          = $dir/index.txt
+serial            = $dir/serial
+crlnumber         = $dir/crlnumber
+private_key       = $dir/private/intermediate.key.pem
+certificate       = $dir/certs/intermediate.cert.pem
+crl               = $dir/crl/intermediate.crl.pem
+default_md        = sm3
+default_crl_days  = 30
+name_opt          = ca_default
+cert_opt          = ca_default
+default_days      = 825
+preserve          = no
+policy            = policy_loose
+copy_extensions   = copy
+
+[ policy_loose ]
+countryName             = optional
+stateOrProvinceName     = optional
+localityName            = optional
+organizationName        = optional
+organizationalUnitName  = optional
+commonName              = supplied
+emailAddress            = optional
+
+[ req ]
+default_bits        = 4096
+distinguished_name  = req_distinguished_name
+string_mask         = utf8only
+default_md          = sm3
+x509_extensions     = v3_intermediate_ca
+
+[ req_distinguished_name ]
+countryName                     = Country Name (2 letter code)
+stateOrProvinceName             = State or Province Name
+organizationName                = Organization Name
+organizationalUnitName          = Organizational Unit Name
+commonName                      = Common Name
+
+[ v3_intermediate_ca ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+basicConstraints = critical, CA:true, pathlen:0
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign
+
+[ server_cert ]
+basicConstraints = CA:FALSE
+nsCertType = server
+nsComment = "OpenSSL Generated Server Certificate"
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+crlDistributionPoints = URI:http://127.0.0.1:8765/repo/gm/intermediate.crl.pem
+authorityInfoAccess = caIssuers;URI:http://127.0.0.1:8765/repo/gm/ca-chain.cert.pem
+
+[ alt_names ]
+DNS.1 = localhost
+IP.1 = 127.0.0.1
+
+[ usr_cert ]
+basicConstraints = CA:FALSE
+nsComment = "OpenSSL Generated Client Certificate"
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth
+crlDistributionPoints = URI:http://127.0.0.1:8765/repo/gm/intermediate.crl.pem
+authorityInfoAccess = caIssuers;URI:http://127.0.0.1:8765/repo/gm/ca-chain.cert.pem
+
+[ crl_ext ]
+authorityKeyIdentifier=keyid:always
