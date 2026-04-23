@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PKI Web 控制台</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>PKI Web 控制台</h1>
+    <p class="muted">本页通过后端调用仓库内 PowerShell 脚本，完成 CA / 签发 / 验证。仅建议在本地或内网使用。</p>
+  </header>
+
+  <section class="panel">
+    <h2>访问控制（可选）</h2>
+    <p class="muted">若启动服务时设置了环境变量 <code>PKI_WEB_TOKEN</code>，请在下方填写相同令牌，请求将携带 <code>X-Admin-Token</code> 头。</p>
+    <label>管理令牌 <input type="password" id="adminToken" placeholder="未设置则留空" autocomplete="off" /></label>
+    <button type="button" id="saveToken">保存到浏览器</button>
+  </section>
+
+  <section class="panel">
+    <h2>流程</h2>
+    <div class="grid">
+      <button data-action="init">1. 初始化目录</button>
+      <button data-action="build-ca">2. 构建 Root / Intermediate CA</button>
+    </div>
+    <div class="row">
+      <label>客户端名称 <input type="text" id="clientName" value="trainee" /></label>
+      <label>P12 密码 <input type="text" id="p12Password" value="ChangeMe!2026" /></label>
+      <button data-action="issue">3. 签发服务端 + 客户端证书</button>
+      <button data-action="verify">4. 校验证书链</button>
+      <button data-action="revoke" class="danger">5. 吊销客户端证书</button>
+    </div>
+    <p class="muted">可选「操作备注」（模拟 RA 留痕），会写入审计日志。</p>
+    <label class="block"><textarea id="auditReason" rows="2" placeholder="例如：培训演示 — 已核对身份"></textarea></label>
+  </section>
+
+  <section class="panel">
+    <h2>状态与下载</h2>
+    <div class="row">
+      <button type="button" id="btnStatus">刷新状态</button>
+      <button type="button" id="btnAudit">查看审计（最近）</button>
+      <a class="buttonlink" href="/repo/" target="_blank" rel="noopener">打开 HTTP 仓库页</a>
+      <button type="button" id="dlP12">下载当前客户端 P12</button>
+      <button type="button" id="dlChain">下载 CA 链 (ca-chain.cert.pem)</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>输出</h2>
+    <pre id="out"></pre>
+  </section>
+
+  <section class="panel muted">
+    <p>浏览器双向 TLS 演示仍按 <code>docs/02-执行手册.md</code> 使用 <code>openssl s_server</code> 与本机 HTTPS；本控制台负责证书生成与状态查看。</p>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
