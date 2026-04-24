@@ -127,6 +127,19 @@ GM 映射：
   - 用 `tls-observe-tls12-no-cert.log`、`tls-observe-tls12-revoked.log` 说明认证失败与吊销拒绝
   - GM TLS1.3 若环境握手不支持会直接返回失败（这是预期行为）
 
+## 控制台结果展示（新增）
+
+- `Intl` 与 `GM` 两个分区都保留原有 `<pre>` 日志窗口，用于查看 `stdout/stderr/raw` 全量输出。
+- 在输出区工具栏与 `<pre>` 之间新增“结果摘要卡片”，展示：
+  - `SUCCESS/FAILED` 状态
+  - `profile`（`intl` / `gm`）
+  - `code`、`action`、`duration_ms`
+  - `steps` 与 `artifacts` 概览
+- 颜色语义：
+  - 成功为绿色、失败为红色
+  - `intl` 使用蓝色标签、`gm` 使用绿色标签
+- 点击“清空”会同时清空摘要卡片和日志窗口内容。
+
 ## 安全建议
 
 - 默认只监听 `127.0.0.1`；若需局域网访问，请自行评估并改用 `--host 0.0.0.0` 且务必设置令牌。

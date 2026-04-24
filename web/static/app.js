@@ -7,6 +7,8 @@ const gmCapabilityState = document.getElementById("gmCapabilityState");
 const themeSelect = document.getElementById("themeSelect");
 const intlOut = document.getElementById("intlOut");
 const gmOut = document.getElementById("gmOut");
+const intlResultCard = document.getElementById("intlResultCard");
+const gmResultCard = document.getElementById("gmResultCard");
 const intlWrapOutputInput = document.getElementById("intlWrapOutput");
 const gmWrapOutputInput = document.getElementById("gmWrapOutput");
 const tabLinks = document.querySelectorAll(".tab-link");
@@ -23,6 +25,10 @@ function getOutEl(profile) {
   return profile === "gm" ? gmOut : intlOut;
 }
 
+function getCardHost(profile) {
+  return profile === "gm" ? gmResultCard : intlResultCard;
+}
+
 function currentProfileFromTab() {
   const active = document.querySelector(".tab-link.is-active");
   const target = active ? active.getAttribute("data-tab-target") : "";
@@ -32,6 +38,95 @@ function currentProfileFromTab() {
 function log(obj, profile = currentProfileFromTab()) {
   const out = getOutEl(profile);
   out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function summarizeList(values, maxItems = 3) {
+  if (!Array.isArray(values) || values.length === 0) return "-";
+  const subset = values.slice(0, maxItems).join(", ");
+  return values.length > maxItems ? `${subset} ...(+${values.length - maxItems})` : subset;
+}
+
+function extractResultMeta(data, profileHint = currentProfileFromTab()) {
+  const d = (data && data.data) || {};
+  return {
+    ok: !!(data && data.ok),
+    code: (data && data.code) || "UNKNOWN",
+    message: (data && data.message) || "",
+    profile: d.profile || profileHint,
+    action: d.action || "-",
+    duration: typeof d.duration_ms === "number" ? `${d.duration_ms} ms` : "-",
+    steps: summarizeList(d.steps),
+    artifacts: summarizeList(d.artifacts),
+  };
+}
+
+function clearResultCard(profile) {
+  const host = getCardHost(profile);
+  if (!host) return;
+  host.innerHTML = '<div class="result-empty">暂无结果，执行操作后会显示摘要卡片。</div>';
+}
+
+function renderResultCard(meta, profile) {
+  const host = getCardHost(profile);
+  if (!host) return;
+  const okClass = meta.ok ? "ok" : "failed";
+  const okText = meta.ok ? "SUCCESS" : "FAILED";
+  const profileClass = meta.profile === "gm" ? "profile-gm" : "profile-intl";
+  host.innerHTML = `
+    <article class="result-card">
+      <div class="result-card-head">
+        <h4 class="result-card-title">${escapeHtml(meta.message || "执行结果")}</h4>
+        <div class="result-badges">
+          <span class="result-pill ${okClass}">${okText}</span>
+          <span class="result-pill ${profileClass}">${escapeHtml(meta.profile.toUpperCase())}</span>
+        </div>
+      </div>
+      <dl class="result-meta">
+        <div class="result-meta-item"><span class="label">Code</span><span class="value">${escapeHtml(meta.code)}</span></div>
+        <div class="result-meta-item"><span class="label">Action</span><span class="value">${escapeHtml(meta.action)}</span></div>
+        <div class="result-meta-item"><span class="label">Duration</span><span class="value">${escapeHtml(meta.duration)}</span></div>
+        <div class="result-meta-item"><span class="label">Steps</span><span class="value">${escapeHtml(meta.steps)}</span></div>
+        <div class="result-meta-item"><span class="label">Artifacts</span><span class="value">${escapeHtml(meta.artifacts)}</span></div>
+      </dl>
+    </article>
+  `;
+}
+
+function renderApiResultText(data) {
+  const lines = [];
+  lines.push(`[${data.ok ? "OK" : "FAILED"}] ${data.code || "UNKNOWN"}: ${data.message || ""}`);
+  const d = data.data || {};
+  if (d.profile) lines.push(`profile: ${d.profile}`);
+  if (d.action) lines.push(`action: ${d.action}`);
+  if (typeof d.duration_ms === "number") lines.push(`duration_ms: ${d.duration_ms}`);
+  if (Array.isArray(d.steps) && d.steps.length) lines.push(`steps: ${d.steps.join(" -> ")}`);
+  if (Array.isArray(d.artifacts) && d.artifacts.length) lines.push(`artifacts: ${d.artifacts.join(", ")}`);
+  if (d.action === "tls-observe") {
+    lines.push("strict-note: TLS1.2 可用于讲解经典握手路径；TLS1.3 默认采用 (EC)DHE 密钥交换，不再使用 RSA 密钥传输。");
+  }
+  if (data.logs && typeof data.logs.stdout === "string" && data.logs.stdout.trim()) {
+    lines.push("");
+    lines.push("stdout:");
+    lines.push(data.logs.stdout.trim());
+  }
+  if (data.logs && typeof data.logs.stderr === "string" && data.logs.stderr.trim()) {
+    lines.push("");
+    lines.push("stderr:");
+    lines.push(data.logs.stderr.trim());
+  }
+  lines.push("");
+  lines.push("raw:");
+  lines.push(JSON.stringify(data, null, 2));
+  return lines.join("\n");
 }
 
 function setTheme(mode) {
@@ -60,32 +155,10 @@ function renderApiResult(data, profileHint = currentProfileFromTab()) {
     log(data, profileHint);
     return;
   }
-  const out = getOutEl((data.data && data.data.profile) || profileHint);
-  const lines = [];
-  lines.push(`[${data.ok ? "OK" : "FAILED"}] ${data.code || "UNKNOWN"}: ${data.message || ""}`);
-  const d = data.data || {};
-  if (d.profile) lines.push(`profile: ${d.profile}`);
-  if (d.action) lines.push(`action: ${d.action}`);
-  if (typeof d.duration_ms === "number") lines.push(`duration_ms: ${d.duration_ms}`);
-  if (Array.isArray(d.steps) && d.steps.length) lines.push(`steps: ${d.steps.join(" -> ")}`);
-  if (Array.isArray(d.artifacts) && d.artifacts.length) lines.push(`artifacts: ${d.artifacts.join(", ")}`);
-  if (d.action === "tls-observe") {
-    lines.push("strict-note: TLS1.2 可用于讲解经典握手路径；TLS1.3 默认采用 (EC)DHE 密钥交换，不再使用 RSA 密钥传输。");
-  }
-  if (data.logs && typeof data.logs.stdout === "string" && data.logs.stdout.trim()) {
-    lines.push("");
-    lines.push("stdout:");
-    lines.push(data.logs.stdout.trim());
-  }
-  if (data.logs && typeof data.logs.stderr === "string" && data.logs.stderr.trim()) {
-    lines.push("");
-    lines.push("stderr:");
-    lines.push(data.logs.stderr.trim());
-  }
-  lines.push("");
-  lines.push("raw:");
-  lines.push(JSON.stringify(data, null, 2));
-  out.textContent = lines.join("\n");
+  const targetProfile = (data.data && data.data.profile) || profileHint;
+  const out = getOutEl(targetProfile);
+  renderResultCard(extractResultMeta(data, targetProfile), targetProfile);
+  out.textContent = renderApiResultText(data);
 }
 
 function adminTokenValue() {
@@ -141,6 +214,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const gmWrap = savedGmWrap === null ? true : savedGmWrap === "1";
   gmWrapOutputInput.checked = gmWrap;
   gmOut.classList.toggle("wrap", gmWrap);
+  clearResultCard("intl");
+  clearResultCard("gm");
 });
 
 themeSelect.addEventListener("change", () => {
@@ -155,10 +230,12 @@ tabLinks.forEach((btn) => {
 
 document.getElementById("btnIntlClearOutput").addEventListener("click", () => {
   intlOut.textContent = "";
+  clearResultCard("intl");
 });
 
 document.getElementById("btnGmClearOutput").addEventListener("click", () => {
   gmOut.textContent = "";
+  clearResultCard("gm");
 });
 
 document.getElementById("btnIntlCopyOutput").addEventListener("click", async () => {
