@@ -13,6 +13,8 @@ const intlWrapOutputInput = document.getElementById("intlWrapOutput");
 const gmWrapOutputInput = document.getElementById("gmWrapOutput");
 const tabLinks = document.querySelectorAll(".tab-link");
 const tabPanels = document.querySelectorAll(".tab-panel");
+const intlSserverStatusPill = document.getElementById("intlSserverStatusPill");
+const gmSserverStatusPill = document.getElementById("gmSserverStatusPill");
 
 function optionalReason(profile) {
   const el = document.getElementById(profile === "gm" ? "gmAuditReason" : "intlAuditReason");
@@ -49,10 +51,9 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function summarizeList(values, maxItems = 3) {
+function renderList(values) {
   if (!Array.isArray(values) || values.length === 0) return "-";
-  const subset = values.slice(0, maxItems).join(", ");
-  return values.length > maxItems ? `${subset} ...(+${values.length - maxItems})` : subset;
+  return values.join("\n");
 }
 
 function extractResultMeta(data, profileHint = currentProfileFromTab()) {
@@ -64,8 +65,8 @@ function extractResultMeta(data, profileHint = currentProfileFromTab()) {
     profile: d.profile || profileHint,
     action: d.action || "-",
     duration: typeof d.duration_ms === "number" ? `${d.duration_ms} ms` : "-",
-    steps: summarizeList(d.steps),
-    artifacts: summarizeList(d.artifacts),
+    steps: renderList(d.steps),
+    artifacts: renderList(d.artifacts),
   };
 }
 
@@ -94,8 +95,8 @@ function renderResultCard(meta, profile) {
         <div class="result-meta-item"><span class="label">Code</span><span class="value">${escapeHtml(meta.code)}</span></div>
         <div class="result-meta-item"><span class="label">Action</span><span class="value">${escapeHtml(meta.action)}</span></div>
         <div class="result-meta-item"><span class="label">Duration</span><span class="value">${escapeHtml(meta.duration)}</span></div>
-        <div class="result-meta-item"><span class="label">Steps</span><span class="value">${escapeHtml(meta.steps)}</span></div>
-        <div class="result-meta-item"><span class="label">Artifacts</span><span class="value">${escapeHtml(meta.artifacts)}</span></div>
+        <div class="result-meta-item"><span class="label">Steps</span><span class="value value-scroll">${escapeHtml(meta.steps)}</span></div>
+        <div class="result-meta-item"><span class="label">Artifacts</span><span class="value value-scroll">${escapeHtml(meta.artifacts)}</span></div>
       </dl>
     </article>
   `;
@@ -110,9 +111,6 @@ function renderApiResultText(data) {
   if (typeof d.duration_ms === "number") lines.push(`duration_ms: ${d.duration_ms}`);
   if (Array.isArray(d.steps) && d.steps.length) lines.push(`steps: ${d.steps.join(" -> ")}`);
   if (Array.isArray(d.artifacts) && d.artifacts.length) lines.push(`artifacts: ${d.artifacts.join(", ")}`);
-  if (d.action === "tls-observe") {
-    lines.push("strict-note: TLS1.2 可用于讲解经典握手路径；TLS1.3 默认采用 (EC)DHE 密钥交换，不再使用 RSA 密钥传输。");
-  }
   if (data.logs && typeof data.logs.stdout === "string" && data.logs.stdout.trim()) {
     lines.push("");
     lines.push("stdout:");
@@ -176,7 +174,7 @@ function profileClientName(profile) {
 function profileP12Password(profile) {
   const id = profile === "gm" ? "gmP12Password" : "intlP12Password";
   const el = document.getElementById(id);
-  return el ? el.value : "ChangeMe!2026";
+  return el ? el.value : "123456";
 }
 
 function headersJson() {
@@ -216,6 +214,12 @@ window.addEventListener("DOMContentLoaded", () => {
   gmOut.classList.toggle("wrap", gmWrap);
   clearResultCard("intl");
   clearResultCard("gm");
+  refreshIntlSserverStatusPill();
+  refreshGmSserverStatusPill();
+  window.setInterval(() => {
+    refreshIntlSserverStatusPill();
+    refreshGmSserverStatusPill();
+  }, 5000);
 });
 
 themeSelect.addEventListener("change", () => {
@@ -302,18 +306,35 @@ async function getJson(url) {
   return data;
 }
 
-async function downloadBlob(path, filename) {
-  const res = await fetch(path, { headers: headersGet() });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(t || `HTTP ${res.status}`);
+function setSserverPill(el, mode, text) {
+  if (!el) return;
+  el.classList.remove("running", "stopped", "unknown");
+  el.classList.add(mode);
+  el.textContent = text;
+}
+
+async function refreshIntlSserverStatusPill() {
+  try {
+    const data = await getJson("/api/intl/browser-mtls/status");
+    const running = !!(data && data.data && data.data.running);
+    setSserverPill(intlSserverStatusPill, running ? "running" : "stopped", running ? "Intl s_server: 运行中(8443)" : "Intl s_server: 未运行");
+  } catch (e) {
+    const msg = String((e && e.message) || e || "");
+    const unauthorized = msg.includes("401") || msg.includes("Invalid or missing admin token");
+    setSserverPill(intlSserverStatusPill, "unknown", unauthorized ? "Intl s_server: 无权限(需令牌)" : "Intl s_server: 状态未知");
   }
-  const blob = await res.blob();
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+}
+
+async function refreshGmSserverStatusPill() {
+  try {
+    const data = await getJson("/api/gm/browser-mtls/status");
+    const running = !!(data && data.data && data.data.running);
+    setSserverPill(gmSserverStatusPill, running ? "running" : "stopped", running ? "GM s_server: 运行中(9443)" : "GM s_server: 未运行");
+  } catch (e) {
+    const msg = String((e && e.message) || e || "");
+    const unauthorized = msg.includes("401") || msg.includes("Invalid or missing admin token");
+    setSserverPill(gmSserverStatusPill, "unknown", unauthorized ? "GM s_server: 无权限(需令牌)" : "GM s_server: 状态未知");
+  }
 }
 
 document.querySelectorAll("button[data-action]").forEach((btn) => {
@@ -335,50 +356,48 @@ document.querySelectorAll("button[data-action]").forEach((btn) => {
         data = await postJson(`${base}/reset-demo`, body);
       } else if (action === "init") data = await postJson(`${base}/init`, {});
       else if (action === "build-ca") data = await postJson(`${base}/build-ca`, {});
-      else if (action === "issue") {
+      else if (action === "issue-server") {
+        const body = {};
+        const r = optionalReason(profile);
+        if (r) body.reason = r;
+        data = await postJson(`${base}/issue-server`, body);
+      } else if (action === "issue-client") {
         const body = {
           clientName: profileClientName(profile),
           p12Password: profileP12Password(profile),
         };
         const r = optionalReason(profile);
         if (r) body.reason = r;
-        data = await postJson(`${base}/issue`, body);
+        data = await postJson(`${base}/issue-client`, body);
       } else if (action === "verify") {
         const body = { clientName: profileClientName(profile) };
         const r = optionalReason(profile);
         if (r) body.reason = r;
         data = await postJson(`${base}/verify`, body);
-      } else if (action === "revoke") {
-        if (!confirm("确定吊销该客户端证书？")) {
+      } else if (action === "revoke-server") {
+        const isGm = profile === "gm";
+        if (!confirm(isGm ? "确定吊销当前 GM 服务端证书？该操作会更新 CRL。" : "确定吊销当前服务端证书？该操作会更新 CRL。")) {
+          getOutEl(profile).textContent = "已取消";
+          return;
+        }
+        const body = {};
+        const r = optionalReason(profile);
+        if (r) body.reason = r;
+        data = await postJson(`${base}/revoke-server`, body);
+      } else if (action === "revoke-client") {
+        if (!confirm(profile === "gm" ? "确定吊销该 GM 客户端证书？" : "确定吊销该客户端证书？")) {
           getOutEl(profile).textContent = "已取消";
           return;
         }
         const body = { clientName: profileClientName(profile) };
         const r = optionalReason(profile);
         if (r) body.reason = r;
-        data = await postJson(`${base}/revoke`, body);
-      } else if (action === "mtls-validate" || action === "mtls-validate-tls13") {
-        const tlsLabel = action === "mtls-validate-tls13" ? "TLS1.3" : "TLS1.2";
-        if (!confirm("一键 mTLS 验证会执行吊销流程并改变证书状态，确认继续？")) {
-          getOutEl(profile).textContent = "已取消";
-          return;
-        }
-        const body = { clientName: profileClientName(profile) };
+        data = await postJson(`${base}/revoke-client`, body);
+      } else if (action === "server-revocation-check") {
+        const body = {};
         const r = optionalReason(profile);
         if (r) body.reason = r;
-        data = await postJson(`${base}/${action}`, body);
-        if (data && data.data) data.data.tlsVersion = tlsLabel;
-      } else if (action === "tls-observe" || action === "tls-observe-tls13") {
-        const tlsLabel = action === "tls-observe-tls13" ? "TLS1.3" : "TLS1.2";
-        if (!confirm("TLS 握手观测会执行吊销与 CRL 更新，并生成多份握手日志，确认继续？")) {
-          getOutEl(profile).textContent = "已取消";
-          return;
-        }
-        const body = { clientName: profileClientName(profile) };
-        const r = optionalReason(profile);
-        if (r) body.reason = r;
-        data = await postJson(`${base}/${action}`, body);
-        if (data && data.data) data.data.tlsVersion = tlsLabel;
+        data = await postJson(`${base}/server-revocation-check`, body);
       }
       renderApiResult(data, profile);
     } catch (e) {
@@ -387,91 +406,57 @@ document.querySelectorAll("button[data-action]").forEach((btn) => {
   });
 });
 
-document.getElementById("btnIntlStatus").addEventListener("click", async () => {
-  getOutEl("intl").textContent = "查询中…";
+document.getElementById("btnIntlBrowserMtlsStart").addEventListener("click", async () => {
+  getOutEl("intl").textContent = "启动中…";
   try {
-    renderApiResult(await getJson("/api/intl/status"), "intl");
-  } catch (e) {
-    log(String(e.message || e), "intl");
-  }
-});
-
-document.getElementById("btnGmStatus").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "查询中…";
-  try {
-    renderApiResult(await getJson("/api/gm/status"), "gm");
-  } catch (e) {
-    log(String(e.message || e), "gm");
-  }
-});
-
-document.getElementById("btnIntlAudit").addEventListener("click", async () => {
-  getOutEl("intl").textContent = "加载 Intl 审计…";
-  try {
-    const data = await getJson("/api/audit/tail?n=80");
-    const entries = (data.data && Array.isArray(data.data.entries)) ? data.data.entries : [];
-    const filtered = entries.filter((e) => (e && e.profile) !== "gm");
-    data.data.entries = filtered;
-    data.data.count = filtered.length;
-    data.message = "intl audit entries fetched";
+    const body = {};
+    const r = optionalReason("intl");
+    if (r) body.reason = r;
+    const data = await postJson("/api/intl/browser-mtls/start", body);
     renderApiResult(data, "intl");
+    await refreshIntlSserverStatusPill();
   } catch (e) {
     log(String(e.message || e), "intl");
   }
 });
 
-document.getElementById("btnGmAudit").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "加载 GM 审计…";
+document.getElementById("btnIntlBrowserMtlsStop").addEventListener("click", async () => {
+  getOutEl("intl").textContent = "关闭中…";
   try {
-    const data = await getJson("/api/audit/tail?n=80");
-    const entries = (data.data && Array.isArray(data.data.entries)) ? data.data.entries : [];
-    const filtered = entries.filter((e) => e && e.profile === "gm");
-    data.data.entries = filtered;
-    data.data.count = filtered.length;
-    data.message = "gm audit entries fetched";
+    const body = {};
+    const r = optionalReason("intl");
+    if (r) body.reason = r;
+    const data = await postJson("/api/intl/browser-mtls/stop", body);
+    renderApiResult(data, "intl");
+    await refreshIntlSserverStatusPill();
+  } catch (e) {
+    log(String(e.message || e), "intl");
+  }
+});
+
+document.getElementById("btnGmBrowserMtlsStart").addEventListener("click", async () => {
+  getOutEl("gm").textContent = "启动中…";
+  try {
+    const body = {};
+    const r = optionalReason("gm");
+    if (r) body.reason = r;
+    const data = await postJson("/api/gm/browser-mtls/start", body);
     renderApiResult(data, "gm");
+    await refreshGmSserverStatusPill();
   } catch (e) {
     log(String(e.message || e), "gm");
   }
 });
 
-document.getElementById("dlIntlP12").addEventListener("click", async () => {
-  const name = profileClientName("intl");
-  getOutEl("intl").textContent = "下载中…";
+document.getElementById("btnGmBrowserMtlsStop").addEventListener("click", async () => {
+  getOutEl("gm").textContent = "关闭中…";
   try {
-    await downloadBlob(`/api/download/p12/${encodeURIComponent(name)}`, `client-${name}.p12`);
-    log("下载已开始：client-" + name + ".p12", "intl");
-  } catch (e) {
-    log(String(e.message || e), "intl");
-  }
-});
-
-document.getElementById("dlIntlChain").addEventListener("click", async () => {
-  getOutEl("intl").textContent = "下载中…";
-  try {
-    await downloadBlob("/api/download/ca-chain", "ca-chain.cert.pem");
-    log("下载已开始：ca-chain.cert.pem", "intl");
-  } catch (e) {
-    log(String(e.message || e), "intl");
-  }
-});
-
-document.getElementById("dlGmP12").addEventListener("click", async () => {
-  const name = profileClientName("gm");
-  getOutEl("gm").textContent = "下载中…";
-  try {
-    await downloadBlob(`/api/gm/download/p12/${encodeURIComponent(name)}`, `gm-client-${name}.p12`);
-    log("下载已开始：gm-client-" + name + ".p12", "gm");
-  } catch (e) {
-    log(String(e.message || e), "gm");
-  }
-});
-
-document.getElementById("dlGmChain").addEventListener("click", async () => {
-  getOutEl("gm").textContent = "下载中…";
-  try {
-    await downloadBlob("/api/gm/download/ca-chain", "gm-ca-chain.cert.pem");
-    log("下载已开始：gm-ca-chain.cert.pem", "gm");
+    const body = {};
+    const r = optionalReason("gm");
+    if (r) body.reason = r;
+    const data = await postJson("/api/gm/browser-mtls/stop", body);
+    renderApiResult(data, "gm");
+    await refreshGmSserverStatusPill();
   } catch (e) {
     log(String(e.message || e), "gm");
   }

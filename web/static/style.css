@@ -181,6 +181,22 @@ main,
   background: var(--panel);
 }
 
+.status-pill.running {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 50%, transparent);
+  background: color-mix(in srgb, var(--success) 13%, transparent);
+}
+
+.status-pill.stopped {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+}
+
+.status-pill.unknown {
+  color: var(--muted);
+}
+
 .row {
   display: flex;
   gap: 0.6rem;
@@ -413,6 +429,15 @@ a.buttonlink {
   font-size: 0.84rem;
   font-weight: 600;
   word-break: break-word;
+}
+
+.result-meta-item .value.value-scroll {
+  max-height: 110px;
+  overflow: auto;
+  white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .result-empty {

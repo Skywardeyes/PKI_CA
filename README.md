@@ -19,8 +19,12 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 - `0. 演示重置`
 - `1. 初始化目录`
 - `2. 构建 Root / Intermediate`
-- `3. 签发服务端 + 客户端`
-- `4. 校验证书链`
+- `3. 签发服务端证书`
+- `4. 签发客户端证书`
+- `5. 校验证书链`
+- （可选）`6. 吊销服务端证书`
+- （可选）`6+. 校验服务端吊销状态`
+- （可选）`7. 吊销客户端证书`
 
 浏览器 mTLS：先按 [docs/02-执行手册.md](docs/02-执行手册.md) **第 9、10 节** 启动业务 mTLS 服务（`openssl s_server`）后访问 `https://localhost:8443/`。
 
@@ -30,7 +34,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 - Intl 国际算法专区：`/api/intl/*`
 - GM 国密算法专区：`/api/gm/*`
 
-两条链路均提供重置、初始化、建 CA、签发、校验、吊销、mTLS、TLS 观测能力；并同时提供 TLS1.2 与 TLS1.3 按钮（GM 的 TLS1.3 握手失败会严格返回 API 失败）。HTTP 证书仓库 `/repo/`（含 `/repo/gm/*`）、审计日志、API 响应结构见 [web/README.md](web/README.md)。
+两条链路均提供重置、初始化、建 CA、签发、校验、吊销、服务端吊销状态校验与浏览器 `s_server` 启停能力。HTTP 证书仓库 `/repo/`（含 `/repo/gm/*`）、审计日志、API 响应结构见 [web/README.md](web/README.md)。
 
 ## 目录说明
 
