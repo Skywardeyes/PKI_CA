@@ -93,7 +93,7 @@ GM 映射：
 - 若 GM CRL 文件不存在，`start` 会先自动执行一次 `gencrl`。
 - 运行产物隔离在 `gm/` 与 `artifacts/logs/gm/`
 
-仓库中 `scripts/*.ps1` 仅作手工对照或培训材料，不参与 Web 控制台执行链。
+仓库中 `scripts/*.ps1` 仅作手工对照或历史材料，不参与 Web 控制台执行链。
 
 ## mTLS 浏览器演示（与控制台配合）
 
